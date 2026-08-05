@@ -1,0 +1,17 @@
+{
+  "language": "en",
+  "dimensions": [
+    "code-quality",
+    "security",
+    "performance",
+    "testing",
+    "documentation"
+  ],
+  "max_diff_lines": 500,
+  "trigger": {
+    "auto_on_idle": false,
+    "cooldown_seconds": 120
+  },
+  "custom_rules": [],
+  "parallel": true
+}

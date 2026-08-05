@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",
+  "agents": {
+    "sisyphus": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "variant": "max",
+      "description": "Orchestrator — phân tích yêu cầu, phân việc, điều phối luồng công việc",
+      "temperature": 0.3
+    },
+    "hephaestus": {
+      "model": "opencode/north-mini-code-free",
+      "variant": "max",
+      "description": "Coding — code chính, implement feature, fix bug, chạy test",
+      "temperature": 0.2
+    },
+    "librarian": {
+      "model": "opencode/big-pickle",
+      "description": "Documentation — tìm tài liệu, search context, hỗ trợ thông tin cho agent chính"
+    },
+    "oracle": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "description": "Review — kiểm tra lỗi, review code, đề xuất cải tiến"
+    }
+  },
+  "categories": {
+    "quick": {
+      "model": "opencode/ling-3.0-flash-free",
+      "description": "Task nhanh, độ phức tập thấp"
+    },
+    "unspecified-low": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "description": "Task chung, effort thấp"
+    },
+    "unspecified-high": {
+      "model": "opencode/mimo-v2.5-free",
+      "description": "Task chung, effort cao"
+    },
+    "writing": {
+      "model": "opencode/big-pickle",
+      "description": "Viết tài liệu, docs, spec"
+    },
+    "visual-engineering": {
+      "model": "opencode/north-mini-code-free",
+      "description": "UI/Frontend code"
+    }
+  },
+  "agent_order": ["sisyphus", "hephaestus", "librarian", "oracle"]
+}

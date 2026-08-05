@@ -1,0 +1,5 @@
+{
+  "model": "opencode/deepseek-v4-flash-free",
+  "updateThreshold": 1,
+  "titleFormat": "{title}"
+}

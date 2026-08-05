@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/bluelovers/opencode-arise/master/opencode-arise.schema.json",
+  "show_banner": false,
+  "banner_every_session": false,
+  "agents": {
+    "monarch": {
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "beru": {
+      "model": "opencode/ling-3.0-flash-free"
+    },
+    "igris": {
+      "model": "opencode/ling-3.0-flash-free"
+    },
+    "bellion": {
+      "model": "opencode/big-pickle"
+    },
+    "tusk": {
+      "model": "opencode/mimo-v2.5-free"
+    },
+    "tank": {
+      "model": "opencode/big-pickle"
+    },
+    "shadow-sovereign": {
+      "model": "opencode/big-pickle"
+    },
+    "esil-radiru": {
+      "model": "opencode/mimo-v2.5-free"
+    }
+  },
+  "output_shaping": {
+    "max_chars": 12000,
+    "preserve_errors": true
+  },
+  "compaction": {
+    "threshold_percent": 80,
+    "preserve_todos": true
+  },
+  "background": {
+    "poll_interval": 2000,
+    "retry_delay_increment": 5000,
+    "retry_delay_max": 60000,
+    "auto_resume": {
+      "enabled": false,
+      "on_error": "ignore",
+      "target": "background"
+    }
+  },
+  "debug": {
+    "enabled": false,
+    "level": "warn"
+  }
+}

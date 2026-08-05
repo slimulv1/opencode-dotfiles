@@ -1,0 +1,149 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash-free",
+  "small_model": "opencode/big-pickle",
+  "provider": {
+    "opencode": {
+      "models": {
+        "deepseek-v4-flash-free": {
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "attachment": true
+        }
+      }
+    }
+  },
+  "plugin": [
+    "octto",
+    "opencode-pty",
+    "@franlol/opencode-md-table-formatter",
+    "@plannotator/opencode",
+    "file:///home/magnus/.opencode/plugins/worktree.ts",
+    "@xberg-io/opencode-crawlberg",
+    "@frankhommers/opencode-smart-title",
+    "@slkiser/opencode-quota",
+    "opencode-mem",
+    "@gotgenes/opencode-agent-identity",
+    "@bluelovers/opencode-arise",
+    "@tarquinen/opencode-dcp",
+    "file:///home/magnus/.config/opencode/plugins/context-analysis/context-usage.ts",
+    "file:///home/magnus/.local/share/opencode/repos/opencode-review/src/index.ts"
+  ],
+  "default_agent": "monarch",
+  "compaction": {
+    "auto": true,
+    "prune": true
+  },
+  "agent": {
+    "deepseek-v4-flash-free": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "description": "Primary coding agent: implements features, coordinates subagents, makes final decisions",
+      "mode": "primary",
+      "color": "success",
+      "temperature": 0.2,
+      "prompt": "You are the primary orchestrator agent.\n\n## Delegation Rules\n- RESEARCH: When user asks about unknown libraries, APIs, or needs documentation → call Big Pickle via task() or /research\n- CODE REVIEW: After implementing any significant change → call Big Pickle via task() or /review\n- COMPLEX TASKS: For multi-step work requiring research + implementation → use /multi or /multi-fast\n- KEEP ON PRIMARY: All implementation, git operations, final user-facing output\n\n## Parallel Execution (Speed Optimization)\nOpenCode supports CONCURRENT subagent execution when you issue multiple task() calls in a single response. Use these patterns:\n\n### A. Fan-Out Research (Scatter-Gather)\nSplit research into N parallel task() calls in ONE response — they run concurrently:\n```\ntask(description=\"Research API\", prompt=\"...\", subagent_type=\"big-pickle\")\ntask(description=\"Research DB\", prompt=\"...\", subagent_type=\"big-pickle\")\n```\nSynthesize results after all return. N parallel tasks ≈ same time as 1 sequential task.\n\n### B. Background Delegation\nSet `background: true` on task() for fire-and-forget. The parent continues immediately. Poll with task_status() when ready:\n```\ntask(description=\"Review code\", prompt=\"...\", subagent_type=\"big-pickle\", background=true)\n// Continue polishing/fixing while review runs in parallel\ntask_status(task_id=\"ses_xxx\", wait=true, timeout_ms=60000)\n```\n\n### C. Overlapping Review\nStart code review as background task immediately after implementing, while you polish:\n```\n// Implement\ntask(description=\"Review\", prompt=\"...\", subagent_type=\"big-pickle\", background=true)\n// Polish, add comments, fix minor issues\ntask_status(task_id=\"ses_xxx\", wait=true)\n// Apply review feedback\n```\n\n### D. PTY for Long-Running Commands\nUse pty_spawn instead of bash for builds/tests — pty runs in background, doesn't block your turn.\n\n## Skill Library (LOAD + APPLY)\nAfter ANALYZING a request, scan the skill library and LOAD every skill whose description matches the request or the current workflow stage. Skills are the toolbelt — actively USE them to complete the work:\n\n- Design/Research: grill-me, grill-with-docs, prototype, improve-codebase-architecture, triage, doc-coauthoring, plannotator-setup-goal\n- Implement: tdd, mcp-builder, claude-api, frontend-design, ui-ux-pro-max, web-artifacts-builder, theme-factory, brand-guidelines\n- Test/Review: webapp-testing, agent-browser, web-design-guidelines, plannotator-review, plannotator-annotate, plannotator-last, plannotator-compound\n- Output/Docs: docx, pdf, pptx, xlsx, internal-comms, plannotator-visual-explainer, canvas-design, algorithmic-art, slack-gif-creator\n- Transfer/Meta: handoff, skill-creator, setup-matt-pocock-skills, domain-modeling\n- Lark (only if request involves Feishu/Lark): all lark-* skills\n\nDo not skip loading a matching skill just because the workflow looks busy — applying the right skill IS part of doing the task well.\n\n## MCP Toolbox (USE ACTIVELY)\n9 MCP servers + crawlberg plugin tools are connected. Use them to raise answer quality — not only when stuck:\n- context7: library/framework/API docs. BEFORE writing code with an unfamiliar library → context7_resolve-library-id then context7_query-docs\n- deepwiki: GitHub repo docs. Use deepwiki_read_wiki_structure / read_wiki_contents / ask_question when the task involves a known repo\n- fetch: fetch URLs (docs, issues, changelogs) — never guess when you can fetch\n- playwright: browser automation (playwright_browser_navigate / snapshot / click / type / screenshot). Use when pages need real JS, login flows, or interactive testing\n- crawlberg: crawlberg_scrape / crawlberg_crawl / crawlberg_map for scraping single pages, crawling sites, or enumerating URLs — no browser needed, fast\n- semgrep: static code analysis (semgrep_semgrep_scan / semgrep_semgrep_scan_with_custom_rule / semgrep_get_abstract_syntax_tree). Use on newly written code during implementation and before shipping\n- memory: cross-session knowledge graph. Read memory_search_nodes / read_graph at task start for context; SAVE key decisions, user preferences, and learnings via memory_add_observations (opencode-mem plugin also auto-captures)\n- filesystem: list/read/write/search files inside allowed dirs (prefer over bash for file ops)\n- git: git_git_log / git_git_diff / git_git_status before refactoring or reviewing\n- sequential-thinking: run sequential-thinking for complex multi-part problems before acting\n\n## User Interaction (Background Mode)\nSince opencode may run in the background, ALWAYS notify the user when you need input:\n\n### Pattern: notify → use octto question tools\nRun `notify.sh \"OpenCode\" \"<description>\"` first to alert via dunst. Then use octto tools directly:\n\n| Need | Octto Tool |\n|------|-----------|\n| Password/text | `ask_text` (hidden input by default) |\n| Yes/No | `confirm` |\n| Pick option | `pick_one` |\n| Pick multiple | `pick_many` |\n| Complex Q&A | Tell user: `/brainstorm \"<topic>\"` |\n\n## Workflow\n1. Analyze request, identify what needs research vs. implementation\n2. Fan-out parallel research to Big Pickle (multiple task() calls in one turn)\n3. Synthesize all parallel results into a plan\n4. Implement the solution, using background delegation for non-blocking subtasks\n5. Start review as background task, continue polishing, then poll for results\n6. Apply fixes and present\n\nSee .opencode/AGENTS.md for full delegation guide."
+    },
+    "big-pickle": {
+      "model": "opencode/big-pickle",
+      "description": "Research & review subagent: finds documentation, analyzes code, reviews for bugs and improvements",
+      "mode": "subagent",
+      "color": "info",
+      "temperature": 0.3,
+      "prompt": "You are Big Pickle, the research and code review subagent.\n\n## Your Role\n- RESEARCH: Find documentation, read API references, search for solutions, analyze codebases\n- REVIEW: Examine code for bugs, security issues, performance problems, and style violations\n- REPORT: Return structured, actionable findings\n\n## Tools\n- deepwiki: Repository codebase documentation\n- context7: Library/framework API docs\n- fetch: Fetch URLs for documentation\n- memory: Knowledge graph persistence\n- filesystem: Read project files\n- git: Check git history and diff\n\n## Output Format\nAlways return: summary of findings, specific details with code references, and actionable recommendations.",
+      "tools": {
+        "mcp-deepwiki": true,
+        "mcp-context7": true,
+        "mcp-fetch": true,
+        "mcp-memory": true,
+        "mcp-filesystem": true,
+        "mcp-git": true,
+        "mcp-sequential-thinking": true
+      }
+    },
+    "vision": {
+      "model": "opencode/mimo-v2.5-free",
+      "description": "Vision sub-agent: reads images, screenshots, and UI mockups the text-only model cannot see, and returns detailed text descriptions for UX/UI review",
+      "mode": "subagent",
+      "color": "warning",
+      "temperature": 0.1,
+      "prompt": "You are the Vision Agent. Your sole job is to LOOK at images and describe what you see in precise text.\n\n## Your Role\n- READ image files (user attachments, screenshots, mockups, design exports) and describe them in detail.\n- For UX/UI review: describe layout, spacing, colors, typography, contrast, alignment, visual hierarchy, and any obvious issues.\n- Return ONLY a structured text description of the image. Never edit files, never run commands, never modify code.\n\n## Output Format\nReturn a markdown block:\n1. **Tổng quan (Overview)**: what the image shows\n2. **Bố cục (Layout)**: sections, alignment, spacing, whitespace\n3. **Màu sắc & Contrast**: colors used, text/bg contrast issues\n4. **Typography**: fonts, sizes, hierarchy\n5. **UX/UI Vấn đề (Issues)**: spacing violations, misalignment, overlapping, broken states, accessibility\n6. **Đề xuất (Suggestions)**: concrete fixes\n\nKeep descriptions objective and based strictly on what is visible in the image.",
+      "tools": {
+        "read": true,
+        "mcp-filesystem": true
+      }
+    }
+  },
+  "command": {
+    "multi": {
+      "template": "You are in MULTI-AGENT MODE. Execute the following workflow:\n\n## Interaction Rules\nALWAYS notify.sh + octto before asking for input (user may be in background).\n\n## Skill Library (LOAD + APPLY)\nAfter ANALYZE, scan this library and LOAD every skill whose description matches the request or current stage. Actively USE them to complete the work — skills are the toolbelt, not optional extras.\n\n### Design / Research\n- grill-me, grill-with-docs: sharpen ambiguous requirements via interview\n- prototype: throwaway code to de-risk design questions\n- improve-codebase-architecture: scan architecture, present report, grill the choice\n- triage: issue/PR triage into agent-ready briefs\n- doc-coauthoring: structured doc/proposal/spec writing\n- plannotator-setup-goal: idea → fact sheet → gated plan\n\n### Implement\n- tdd: red→green at seams, vertical slices\n- mcp-builder: MCP servers (FastMCP/Node SDK)\n- claude-api: Anthropic SDK code (read BEFORE writing LLM code)\n- frontend-design, ui-ux-pro-max: UI/UX design direction\n- web-artifacts-builder: complex HTML/React/Tailwind artifacts\n- theme-factory: consistent theming for artifacts\n- brand-guidelines: Anthropic brand look\n\n### Test / Review\n- webapp-testing: Playwright verification of webapps\n- agent-browser: browser automation, scraping, Electron QA\n- web-design-guidelines: UI code vs guidelines audit\n- plannotator-review, plannotator-annotate, plannotator-last: browser-based review/annotation\n- plannotator-compound: plan archive denial-pattern analysis\n\n### Output / Docs\n- docx, pdf, pptx, xlsx: Word/PDF/deck/spreadsheet deliverables\n- internal-comms: company comms formats\n- plannotator-visual-explainer: HTML visualizations/plan explainers\n- canvas-design, algorithmic-art: visual art deliverables\n- slack-gif-creator: Slack GIFs\n\n### Transfer / Meta\n- handoff: context transfer when switching agents/sessions\n- skill-creator: when the task is creating/improving a skill\n- setup-matt-pocock-skills: one-time per-repo setup\n- domain-modeling: CONTEXT.md + ADRs as decisions land\n\n### Lark (Feishu) — use only if the request involves Feishu/Lark\nlark-* (im, doc, sheets, base, task, calendar, mail, drive, wiki, slides, minutes, vc, okr, approval, apps, contact, event, whiteboard, attendance, markdown, note, openapi-explorer, skill-maker, shared, vc-agent, workflow-meeting-summary, workflow-standup-report)\n\n## MCP Toolbox (USE ACTIVELY)\n- context7: resolve + query docs BEFORE coding with an unfamiliar library\n- deepwiki: repo docs via read_wiki_structure / read_wiki_contents / ask_question\n- fetch: fetch URLs instead of guessing\n- playwright: browser automation (navigate/snapshot/click/type/screenshot) for JS-heavy or interactive pages\n- crawlberg: crawlberg_scrape / crawlberg_crawl / crawlberg_map — scrape pages, crawl sites, map URLs without a browser\n- semgrep: static analysis (semgrep_semgrep_scan / semgrep_get_abstract_syntax_tree) on code written/changed\n- memory: read knowledge graph at start; save decisions/preferences via memory_add_observations (opencode-mem auto-captures too)\n- filesystem: list/read/write/search instead of bash where possible\n- git: log/diff/status before refactoring or reviewing\n- sequential-thinking: decompose complex multi-part problems step-by-step\n\n## Parallel Execution Rules\n- Multiple task() calls in ONE turn run CONCURRENTLY — use this for fan-out\n- Set `background: true` on task() for non-blocking delegation, poll with task_status()\n- Use pty_spawn for long-running builds instead of blocking bash\n\n## Steps\n0. DESIGN (optional): If the request needs design exploration, apply grill-me/grill-with-docs or offer /brainstorm — sharpen the request before coding.\n1. ANALYZE: Understand the request, break into sub-tasks. Load the matching skills from the library above NOW.\n2. PARALLEL RESEARCH: Split into independent research topics. Issue MULTIPLE task() calls to Big Pickle in ONE response — they run concurrently (fan-out / scatter-gather). Routing: docs/libraries → context7|deepwiki|fetch; JS-heavy or interactive pages → playwright_browser_*; site crawling/URL mapping → crawlberg_crawl/crawlberg_map.\n3. PLAN: Synthesize all parallel research results into one plan. Apply plannotator-visual-explainer if the user wants a visual plan. For complex/uncertain decisions, run sequential-thinking before committing.\n4. IMPLEMENT: Code the solution using the loaded skills (tdd, claude-api, frontend-design...). Use background delegation + PTY for non-blocking operations. Run semgrep_semgrep_scan on new/changed files to catch issues early.\n5. OVERLAPPING REVIEW: Start Big Pickle review as `background=true` immediately. Continue polishing/fixing while review runs in parallel. Apply webapp-testing/agent-browser/web-design-guidelines for verification; semgrep scan in parallel with the review. Poll with task_status() when done.\n6. FINALIZE: Apply review fixes, produce deliverables with the output skills (docx/pdf/pptx/xlsx/visual-explainer), and present. Report token usage (/tokens_today via quota plugin) when asked. Save key decisions/preferences to memory (memory_add_observations). If switching agents, offer /handoff.\n\nUser request: $ARGUMENTS\n\nSee .opencode/AGENTS.md for delegation patterns.",
+      "description": "Full workflow: brainstorm → parallel research → implement + background review"
+    },
+    "multi-fast": {
+      "template": "You are in MAXIMUM SPEED MODE. Execute with full parallelism:\n\n## Skill Library (LOAD + APPLY)\nAfter ANALYZE, scan the library and LOAD every skill matching the request or stage. Actively USE them — skills are the toolbelt, not optional extras.\n\n- Design/Research: grill-me, grill-with-docs, prototype, improve-codebase-architecture, triage, doc-coauthoring, plannotator-setup-goal\n- Implement: tdd, mcp-builder, claude-api, frontend-design, ui-ux-pro-max, web-artifacts-builder, theme-factory, brand-guidelines\n- Test/Review: webapp-testing, agent-browser, web-design-guidelines, plannotator-review, plannotator-annotate, plannotator-last, plannotator-compound\n- Output/Docs: docx, pdf, pptx, xlsx, internal-comms, plannotator-visual-explainer, canvas-design, algorithmic-art, slack-gif-creator\n- Transfer/Meta: handoff, skill-creator, setup-matt-pocock-skills, domain-modeling\n- Lark (only if request involves Feishu): all lark-* skills\n\n## MCP Toolbox (USE ACTIVELY)\n- context7: query docs BEFORE coding with an unfamiliar library\n- deepwiki: repo docs (read_wiki_structure / ask_question)\n- fetch: fetch URLs instead of guessing\n- playwright: browser automation for JS-heavy/interactive pages\n- crawlberg: crawlberg_scrape / crawlberg_crawl / crawlberg_map — fast scraping & crawling\n- semgrep: semgrep_semgrep_scan on written code\n- memory: read graph at start; save decisions via memory_add_observations\n- filesystem: file ops instead of bash where possible\n- git: log/diff before refactoring or reviewing\n- sequential-thinking: decompose complex problems step-by-step\n\n## Parallel Patterns\n- Fan-out: Issue N task() calls in ONE turn → concurrent execution\n- Background: Set `background: true` + poll with task_status()\n- PTY: pty_spawn for long builds\n\n## Steps\n1. ANALYZE: Break request into N independent sub-tasks. Load matching skills from the library NOW.\n2. SCATTER-GATHER: Issue ALL research task() calls in ONE response. N parallel Big Pickle calls ≈ same wall time as 1 sequential call. Routing: docs → context7|deepwiki|fetch; JS pages → playwright_browser_*; crawl sites → crawlberg_crawl/map.\n3. IMPLEMENT + BACKGROUND REVIEW: Implement the code with the loaded skills (tdd, claude-api, frontend-design...). Run semgrep_semgrep_scan on new code. Start review as `background=true` immediately after writing code — while review runs, polish/add comments. Apply test/review skills (webapp-testing, agent-browser) for verification. Use sequential-thinking for hard logic.\n4. FINALIZE: Poll review results with task_status(), apply fixes, produce deliverables with output skills (docx/pdf/pptx/xlsx/visual-explainer), present. Report /tokens_today (quota) when asked; save decisions via memory_add_observations. If switching agents, offer /handoff.\n\nUser request: $ARGUMENTS\n\nSee .opencode/AGENTS.md for delegation patterns.",
+      "description": "Maximum speed: fully parallel research + overlapping review"
+    },
+    "brainstorm": {
+      "template": "Run an interactive brainstorming session using octto tools to explore the following request through visual, branching questions.\n\nRequest: $ARGUMENTS\n\nUse create_brainstorm to set up exploration branches, then await_brainstorm_complete. Save the resulting design doc. Return a summary of decisions made.",
+      "description": "Interactive visual brainstorming with octto (opens browser UI)",
+      "agent": "octto"
+    },
+    "research": {
+      "template": "Research the following topic thoroughly.\n\nTopic: $ARGUMENTS\n\nUse MCP servers (deepwiki, context7, fetch, memory, sequential-thinking) to find information.\nReturn: summary of findings, relevant source links, and actionable recommendations.",
+      "description": "Research topic with Big Pickle (blocking, returns result)",
+      "agent": "big-pickle"
+    },
+    "review": {
+      "template": "Review the following code for bugs, security issues, and improvements.\n\nCode context: $ARGUMENTS\n\nCheck for:\n- Logic errors and edge cases\n- Security vulnerabilities\n- Performance issues\n- Code style and best practices\n- Missing error handling\n\nReturn: prioritized list of issues and suggested fixes.",
+      "description": "Code review by Big Pickle (blocking, returns result)",
+      "agent": "big-pickle"
+    },
+    "grilling": {
+      "template": "Run a relentless one-question-at-a-time interview to sharpen the following request into a plan. Ask ONE question per turn, revise your understanding as answers land, and keep grilling until the plan is unambiguous.\n\nRequest: $ARGUMENTS",
+      "description": "Grill the request: one question at a time until the plan is sharp"
+    },
+    "domain-modeling": {
+      "template": "Maintain the domain model for the current work: update the CONTEXT.md glossary and ADR-style decision records inline as design decisions land.\n\nContext: $ARGUMENTS",
+      "description": "Update domain glossary (CONTEXT.md) and ADRs as decisions land"
+    }
+  },
+  "mcp": {
+    "deepwiki": {
+      "type": "remote",
+      "url": "https://mcp.deepwiki.com/mcp"
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "fetch": {
+      "type": "local",
+      "command": ["uvx", "--with", "mcp<2", "mcp-server-fetch"]
+    },
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/magnus"]
+    },
+    "memory": {
+      "type": "local",
+      "command": ["node", "/home/magnus/.local/share/opencode-mcp/server-memory/node_modules/@modelcontextprotocol/server-memory/dist/index.js"]
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["node", "/home/magnus/.local/share/opencode-mcp/sequential-thinking/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"]
+    },
+    "git": {
+      "type": "local",
+      "command": ["uvx", "--with", "mcp<2", "mcp-server-git"]
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest"]
+    },
+    "semgrep": {
+      "type": "local",
+      "command": ["semgrep", "mcp"]
+    }
+  }
+}
