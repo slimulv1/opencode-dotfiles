@@ -145,5 +145,28 @@
       "type": "local",
       "command": ["semgrep", "mcp"]
     }
+  },
+  // Lớp Bảo Vệ Arisa — Tầng 4: Permission Guard
+  // Chặn cứng các lệnh pipe tải-về-rồi-chạy (nguồn skill/plugin độc hại),
+  // các lệnh phá huỷ hệ thống; hỏi anh trước các lệnh thay đổi hệ thống.
+  "permission": {
+    "bash": {
+      "curl * | bash": "deny",
+      "curl * | sh": "deny",
+      "wget * | bash": "deny",
+      "wget * | sh": "deny",
+      "rm -rf / *": "deny",
+      "rm -rf /*": "deny",
+      "sudo *": "ask",
+      "pacman -S*": "ask",
+      "yay -S*": "ask",
+      "paru -S*": "ask",
+      "pip install*": "ask",
+      "pip3 install*": "ask",
+      "npm install -g*": "ask",
+      "npm i -g*": "ask",
+      "crontab*": "ask",
+      "systemctl enable*": "ask"
+    }
   }
 }
