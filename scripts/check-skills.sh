@@ -53,23 +53,28 @@ while read -r _oldhash path; do
   fi
 done < "$BASELINE"
 
-# đối chiếu skill-lock: skill không có trong lock = nguồn lạ
+# đối chiếu skill-lock: skill không có trong lock = nguồn lạ (trừ khi đã xác nhận trong approved list)
 echo ""
-echo "${BOLD}─ Đối chiếu nguồn gốc (.skill-lock.json)${RST}"
+echo "${BOLD}─ Đối chiếu nguồn gốc (.skill-lock.json + .skill-approved)${RST}"
 LOCKED_SKILLS=""
 if [ -f "$LOCK" ]; then
   LOCKED_SKILLS=$(grep -o '"skillPath":[[:space:]]*"[^"]*"' "$LOCK" 2>/dev/null | sed 's/.*: *"//;s/"//')
 fi
+APPROVED="$BASE_DIR/.skill-approved"
 UNKNOWN=0
 for d in "$SKILLS_DIR"/*/; do
   [ -d "$d" ] || continue
   name=$(basename "$d")
   if ! echo "$LOCKED_SKILLS" | grep -qF "$name"; then
-    echo "  ${RED}[NGUỒN LẠ]${RST} $name (không có trong skill-lock!)"
+    if [ -f "$APPROVED" ] && grep -qxF "$name" "$APPROVED"; then
+      continue  # skill cũ đã được xác nhận an toàn
+    fi
+    echo "  ${RED}[NGUỒN LẠ]${RST} $name (không có trong skill-lock và chưa xác nhận!)"
     UNKNOWN=$((UNKNOWN+1))
   fi
 done
 [ "$UNKNOWN" -eq 0 ] && echo "  ${GRN}Tất cả skill đều có nguồn gốc rõ ràng ✅${RST}"
+echo "  ${CY}(skill trong .skill-approved không báo lạ — xem danh sách: cat ~/.agents/.skill-approved)${RST}"
 
 echo ""
 echo "${BOLD}══════════════════════════════════════════${RST}"

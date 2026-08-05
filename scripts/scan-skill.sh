@@ -19,10 +19,26 @@ TOTAL_DANGER=0
 TOTAL_WARN=0
 SCANNED=0
 
+# Chỉ lấy các dòng code trong file markdown: trong ```fence``` hoặc thụt lề 4+ (giữ số dòng gốc)
+md_code_lines() {
+  awk '
+    /^[[:space:]]*```/ { infence = !infence; next }
+    infence { print FNR ":" $0; next }
+    /^[[:space:]]{4,}/ || /^\t/ { print FNR ":" $0 }
+  ' "$1"
+}
+
 scan_file() {
-  local f="$1" rel="$2" hits
-  # 1 pass DANGER (bỏ dòng comment, bỏ file nhị phân)
-  hits=$(grep -nIE "$DANGER_RE" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  local f="$1" rel="$2" hits md=0
+  case "$f" in
+    *.md|*.markdown) md=1 ;;
+  esac
+  # 1 pass DANGER (markdown: chỉ quét code block; bỏ dòng comment, bỏ file nhị phân)
+  if [ "$md" = 1 ]; then
+    hits=$(md_code_lines "$f" | grep -E "$DANGER_RE" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  else
+    hits=$(grep -nIE "$DANGER_RE" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  fi
   if [ -n "$hits" ]; then
     while IFS= read -r l; do
       printf '%s[%s]DANGER%s %s:%s\n' "$RED" '!!' "$RST" "$rel" "$l"
@@ -30,7 +46,11 @@ scan_file() {
     TOTAL_DANGER=$((TOTAL_DANGER + $(grep -c . <<< "$hits")))
   fi
   # 1 pass WARN
-  hits=$(grep -nIE "$WARN_RE" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  if [ "$md" = 1 ]; then
+    hits=$(md_code_lines "$f" | grep -E "$WARN_RE" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  else
+    hits=$(grep -nIE "$WARN_RE" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  fi
   if [ -n "$hits" ]; then
     while IFS= read -r l; do
       printf '%s[!]%s %s:%s\n' "$YEL" "$RST" "$rel" "$l"
